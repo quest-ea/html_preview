@@ -271,6 +271,101 @@
     #console-panel.collapsed { min-height: 28px !important; }
 
     .toggle-arrow { font-size: 10px; color: var(--text-dim); margin-left: auto; }
+
+    /* ─── Mobile layout ─── */
+    @media (max-width: 768px) {
+      :root { --tab-h: 44px; }
+
+      body { height: 100dvh; }
+
+      header { height: 44px; padding: 0 12px; }
+      header h1 { font-size: 13px; }
+      .btn { padding: 6px 10px; font-size: 11px; }
+
+      /* Hide desktop resizers */
+      .resizer-v, .resizer-h { display: none; }
+
+      /* Top row: full height, column direction */
+      .pane-row {
+        flex-direction: column;
+        position: relative;
+      }
+
+      /* Each panel fills full area; hidden by default */
+      .editor-pane, .preview-pane {
+        position: absolute;
+        inset: 0;
+        min-width: unset;
+        min-height: unset;
+        flex: unset !important;
+        display: none;
+      }
+      .editor-pane.mobile-active,
+      .preview-pane.mobile-active { display: flex; }
+
+      /* Console: fixed height at bottom of top-row, no resize */
+      #top-row {
+        flex: 1 !important;
+        position: relative;
+      }
+
+      #rh-console { display: none; }
+
+      #console-panel {
+        height: 120px !important;
+        flex-shrink: 0;
+      }
+      #console-panel.collapsed { height: 28px !important; }
+
+      /* Bottom tab bar */
+      #mobile-tabs {
+        display: flex;
+        flex-shrink: 0;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        height: 52px;
+      }
+      .mobile-tab {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        border: none;
+        background: transparent;
+        color: var(--text-dim);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: .06em;
+        cursor: pointer;
+        transition: color .15s, background .15s;
+        padding: 6px 0;
+        position: relative;
+      }
+      .mobile-tab .tab-dot {
+        width: 20px; height: 3px;
+        border-radius: 2px;
+        background: transparent;
+        transition: background .15s;
+      }
+      .mobile-tab.active { color: var(--text); }
+      .mobile-tab.html.active .tab-dot  { background: var(--accent-html); }
+      .mobile-tab.css.active .tab-dot   { background: var(--accent-css); }
+      .mobile-tab.js.active .tab-dot    { background: var(--accent-js); }
+      .mobile-tab.prev.active .tab-dot  { background: var(--accent-preview); }
+
+      /* Textarea bigger font for mobile */
+      textarea { font-size: 14px; }
+
+      /* Pane header char count: shorter text */
+      .char-count { font-size: 10px; }
+    }
+
+    /* Desktop: hide mobile tabs */
+    @media (min-width: 769px) {
+      #mobile-tabs { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -337,7 +432,7 @@
   <div class="resizer-h" id="rh-console"></div>
 
   <!-- Console -->
-  <div id="console-panel" style="height: 140px;">
+  <div id="console-panel" style="height: 140px;" class="collapsed">
     <div class="console-header" id="console-toggle">
       <span>Console</span>
       <span class="error-badge" id="error-badge">0</span>
@@ -346,6 +441,26 @@
     </div>
     <div id="console-list"></div>
   </div>
+
+  <!-- Mobile bottom tab bar -->
+  <nav id="mobile-tabs">
+    <button class="mobile-tab html active" data-target="pane-html">
+      <div class="tab-dot"></div>
+      HTML
+    </button>
+    <button class="mobile-tab css" data-target="pane-css">
+      <div class="tab-dot"></div>
+      CSS
+    </button>
+    <button class="mobile-tab js" data-target="pane-js">
+      <div class="tab-dot"></div>
+      JS
+    </button>
+    <button class="mobile-tab prev" data-target="pane-preview">
+      <div class="tab-dot"></div>
+      PREVIEW
+    </button>
+  </nav>
 
 </div>
 
@@ -643,6 +758,45 @@ ${js}
     toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 2000);
   }
 
+  // ── Mobile tab switching ──────────────────────────────
+  const mobileTabs = document.querySelectorAll('.mobile-tab');
+  const allPanes   = ['pane-html','pane-css','pane-js','pane-preview'];
+
+  function isMobile() { return window.innerWidth <= 768; }
+
+  function initMobileLayout() {
+    if (!isMobile()) return;
+    // Set first pane active
+    allPanes.forEach((id, i) => {
+      const el = $(id);
+      el.classList.toggle('mobile-active', i === 0);
+    });
+  }
+
+  function switchMobileTab(targetId) {
+    allPanes.forEach(id => $(id).classList.remove('mobile-active'));
+    $(targetId).classList.add('mobile-active');
+    mobileTabs.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.target === targetId);
+    });
+    // Auto-update preview when switching to it
+    if (targetId === 'pane-preview') scheduleUpdate();
+  }
+
+  mobileTabs.forEach(btn => {
+    btn.addEventListener('click', () => switchMobileTab(btn.dataset.target));
+  });
+
+  // Re-apply on resize
+  window.addEventListener('resize', () => {
+    if (!isMobile()) {
+      allPanes.forEach(id => $(id).classList.remove('mobile-active'));
+    } else {
+      const active = document.querySelector('.mobile-tab.active');
+      if (active) switchMobileTab(active.dataset.target);
+    }
+  });
+
   // ── Initial state ─────────────────────────────────────
   htmlTA.value = `<h1>Hello, World!</h1>
 <p id="msg">ここに文字が入ります</p>
@@ -675,6 +829,7 @@ button {
 console.log('スクリプト読み込み完了');`;
 
   ['html','css','js'].forEach(l => updateCount($(`code-${l}`), $(`count-${l}`)));
+  initMobileLayout();
   updatePreview();
 
 })();
