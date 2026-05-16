@@ -372,12 +372,40 @@
     el.textContent = `${len.toLocaleString()} 文字 / ${bytes.toLocaleString()} B`;
   }
 
+  // Excel CSV quoting: outer "..." wrapper + doubled "" → "
+  function stripExcelQuotes(text) {
+    let s = text;
+    // Remove leading/trailing whitespace before checking
+    const trimmed = s.trim();
+    // Pattern: starts with " and ends with " (Excel CSV wrapping)
+    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+      // Strip outer quotes, then unescape doubled quotes
+      s = trimmed.slice(1, -1).replace(/""/g, '"');
+    }
+    return s;
+  }
+
   ['html','css','js'].forEach(lang => {
     const ta  = $(`code-${lang}`);
     const cnt = $(`count-${lang}`);
     ta.addEventListener('input', () => {
       updateCount(ta, cnt);
       scheduleUpdate();
+    });
+    // Strip Excel CSV quoting on paste
+    ta.addEventListener('paste', e => {
+      const raw = (e.clipboardData || window.clipboardData).getData('text');
+      const cleaned = stripExcelQuotes(raw);
+      if (cleaned !== raw) {
+        e.preventDefault();
+        const start = ta.selectionStart;
+        const end   = ta.selectionEnd;
+        ta.value = ta.value.slice(0, start) + cleaned + ta.value.slice(end);
+        ta.selectionStart = ta.selectionEnd = start + cleaned.length;
+        updateCount(ta, cnt);
+        scheduleUpdate();
+        showPasteToast('Excel引用符を自動除去しました');
+      }
     });
     // Tab key support
     ta.addEventListener('keydown', e => {
@@ -592,6 +620,28 @@ ${js}
       setTimeout(() => btn.textContent = 'コピー', 1500);
     });
   });
+
+  // ── Paste toast notification ─────────────────────────
+  let toastTimer = null;
+  function showPasteToast(msg) {
+    let toast = document.getElementById('paste-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'paste-toast';
+      toast.style.cssText = `
+        position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+        background:#a6e3a1; color:#1e1e2e; font-size:12px; font-weight:600;
+        padding:7px 16px; border-radius:20px; z-index:9999;
+        box-shadow:0 2px 12px rgba(0,0,0,.4); pointer-events:none;
+        transition:opacity .3s;
+      `;
+      document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.opacity = '1';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 2000);
+  }
 
   // ── Initial state ─────────────────────────────────────
   htmlTA.value = `<h1>Hello, World!</h1>
