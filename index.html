@@ -71,6 +71,8 @@
     .btn:hover { background: var(--border); }
     .btn.danger { border-color: var(--error); color: var(--error); }
     .btn.danger:hover { background: #3d1a20; }
+    .btn.primary { border-color: var(--accent-preview); color: var(--accent-preview); }
+    .btn.primary:hover { background: #1a3020; }
 
     /* ─── Layout ─── */
     .workspace {
@@ -159,6 +161,12 @@
       overflow: auto;
     }
     textarea::placeholder { color: var(--text-dim); }
+
+    /* ─── Drag & Drop highlight ─── */
+    .editor-pane.drag-over textarea {
+      background: var(--surface2);
+      box-shadow: inset 0 0 0 2px var(--accent-preview);
+    }
 
     /* ─── Preview pane ─── */
     .preview-pane {
@@ -374,9 +382,12 @@
   <div class="dot"></div>
   <h1>Live Code Preview</h1>
   <div class="header-actions">
+    <button class="btn primary" id="btn-open-file" title="ファイルを開く（.html / .css / .js）">開く</button>
     <button class="btn" id="btn-copy-all" title="全コードをコピー">コピー</button>
     <button class="btn danger" id="btn-clear-all" title="全クリア">クリア</button>
   </div>
+  <!-- 非表示のファイル選択。「開く」ボタンから呼び出す -->
+  <input type="file" id="file-input" accept=".html,.htm,.css,.js,.txt" multiple style="display:none;">
 </header>
 
 <div class="workspace" id="workspace">
@@ -390,7 +401,7 @@
         <span class="lang-badge">HTML</span>
         <span class="char-count" id="count-html">0 文字</span>
       </div>
-      <textarea id="code-html" placeholder="HTML を入力..." spellcheck="false"></textarea>
+      <textarea id="code-html" placeholder="HTML を入力...（ファイルをここにドロップしてもOK）" spellcheck="false"></textarea>
     </div>
 
     <div class="resizer-v" id="rv1"></div>
@@ -401,7 +412,7 @@
         <span class="lang-badge">CSS</span>
         <span class="char-count" id="count-css">0 文字</span>
       </div>
-      <textarea id="code-css" placeholder="CSS を入力..." spellcheck="false"></textarea>
+      <textarea id="code-css" placeholder="CSS を入力...（ファイルをここにドロップしてもOK）" spellcheck="false"></textarea>
     </div>
 
     <div class="resizer-v" id="rv2"></div>
@@ -412,7 +423,7 @@
         <span class="lang-badge">JS</span>
         <span class="char-count" id="count-js">0 文字</span>
       </div>
-      <textarea id="code-js" placeholder="JavaScript を入力..." spellcheck="false"></textarea>
+      <textarea id="code-js" placeholder="JavaScript を入力...（ファイルをここにドロップしてもOK）" spellcheck="false"></textarea>
     </div>
 
     <div class="resizer-v" id="rv3"></div>
@@ -532,6 +543,98 @@
       }
     });
   });
+
+  // ══════════════════════════════════════════════════════
+  // ★ 新機能: ファイルを開く
+  // ══════════════════════════════════════════════════════
+
+  // 拡張子から「どのエディタに入れるか」を判定する
+  function detectLang(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    if (ext === 'html' || ext === 'htm') return 'html';
+    if (ext === 'css') return 'css';
+    if (ext === 'js')  return 'js';
+    return null; // .txt など → どこに入れるか不明
+  }
+
+  // ファイルを読み込んで、指定のエディタに入れる
+  function loadFileInto(file, lang) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const ta  = $(`code-${lang}`);
+      const cnt = $(`count-${lang}`);
+      ta.value = reader.result;
+      updateCount(ta, cnt);
+      scheduleUpdate();
+      showPasteToast(`${file.name} を ${lang.toUpperCase()} に読み込みました`);
+    };
+    reader.onerror = () => {
+      showPasteToast(`${file.name} の読み込みに失敗しました`);
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  // 複数ファイルを受け取って、拡張子ごとに振り分ける
+  function handleFiles(fileList) {
+    const files = Array.from(fileList);
+    if (files.length === 0) return;
+
+    files.forEach(file => {
+      const lang = detectLang(file.name);
+      if (lang) {
+        loadFileInto(file, lang);
+      } else {
+        // 拡張子が不明な場合（.txtなど）→ HTMLに入れるか確認
+        if (confirm(`「${file.name}」は拡張子から種類を判別できません。\nHTMLエディタに読み込みますか？`)) {
+          loadFileInto(file, 'html');
+        }
+      }
+    });
+  }
+
+  // 「開く」ボタン → 隠しファイル入力をクリック
+  const fileInput = $('file-input');
+  $('btn-open-file').addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', () => {
+    handleFiles(fileInput.files);
+    fileInput.value = ''; // 同じファイルをもう一度選べるようにリセット
+  });
+
+  // ── ドラッグ&ドロップでも開けるようにする ──
+  // 各エディタ枠にドロップ → そのエディタに読み込む（拡張子は問わない）
+  [['pane-html','html'], ['pane-css','css'], ['pane-js','js']].forEach(([paneId, lang]) => {
+    const pane = $(paneId);
+
+    pane.addEventListener('dragover', e => {
+      e.preventDefault(); // これがないとドロップできない
+      pane.classList.add('drag-over');
+    });
+    pane.addEventListener('dragleave', () => {
+      pane.classList.remove('drag-over');
+    });
+    pane.addEventListener('drop', e => {
+      e.preventDefault();
+      pane.classList.remove('drag-over');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        // ドロップ先のエディタに直接読み込む（最初の1ファイルのみ）
+        loadFileInto(files[0], lang);
+        // 2ファイル以上ドロップされたら、残りは拡張子で自動振り分け
+        if (files.length > 1) {
+          handleFiles(Array.from(files).slice(1));
+        }
+      }
+    });
+  });
+
+  // ページ全体へのドロップで誤ってファイルが開かれるのを防ぐ
+  window.addEventListener('dragover', e => e.preventDefault());
+  window.addEventListener('drop', e => e.preventDefault());
+
+  // ══════════════════════════════════════════════════════
+  // ここまで新機能
+  // ══════════════════════════════════════════════════════
 
   // ── Preview update ────────────────────────────────────
   let timer = null;
