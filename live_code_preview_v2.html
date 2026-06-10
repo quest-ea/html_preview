@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Code Preview</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #1e1e2e;
+      --surface: #181825;
+      --surface2: #313244;
+      --border: #45475a;
+      --text: #cdd6f4;
+      --text-dim: #6c7086;
+      --accent-html: #f38ba8;
+      --accent-css: #89b4fa;
+      --accent-js: #f9e2af;
+      --accent-preview: #a6e3a1;
+      --error: #f38ba8;
+      --warn: #fab387;
+      --ok: #a6e3a1;
+      --tab-h: 38px;
+      --editor-min: 200px;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ─── Header ─── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+      height: 48px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    header h1 {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: .03em;
+    }
+    header .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-preview); }
+
+    .header-actions {
+      margin-left: auto;
+      display: flex;
+      gap: 8px;
+    }
+    .btn {
+      padding: 5px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn:hover { background: var(--border); }
+    .btn.danger { border-color: var(--error); color: var(--error); }
+    .btn.danger:hover { background: #3d1a20; }
+    .btn.primary { border-color: var(--accent-preview); color: var(--accent-preview); }
+    .btn.primary:hover { background: #1a3020; }
+
+    /* ─── Layout ─── */
+    .workspace {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .pane-row {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* ─── Resizer ─── */
+    .resizer-h {
+      height: 5px;
+      background: var(--border);
+      cursor: row-resize;
+      flex-shrink: 0;
+      transition: background .15s;
+    }
+    .resizer-h:hover, .resizer-h.dragging { background: var(--accent-css); }
+
+    .resizer-v {
+      width: 5px;
+      background: var(--border);
+      cursor: col-resize;
+      flex-shrink: 0;
+      transition: background .15s;
+    }
+    .resizer-v:hover, .resizer-v.dragging { background: var(--accent-css); }
+
+    /* ─── Editor pane ─── */
+    .editor-pane {
+      display: flex;
+      flex-direction: column;
+      min-width: 120px;
+      min-height: var(--editor-min);
+      overflow: hidden;
+    }
+
+    .pane-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      height: var(--tab-h);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      user-select: none;
+    }
+    .pane-header .lang-badge {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 4px;
+    }
+    .html .lang-badge { background: #3d1a20; color: var(--accent-html); }
+    .css  .lang-badge { background: #1a2540; color: var(--accent-css); }
+    .js   .lang-badge { background: #3d3010; color: var(--accent-js); }
+
+    .char-count {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-left: auto;
+    }
+
+    textarea {
+      flex: 1;
+      background: var(--surface);
+      color: var(--text);
+      border: none;
+      outline: none;
+      padding: 12px;
+      font-family: 'Consolas', 'Cascadia Code', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      resize: none;
+      tab-size: 2;
+      white-space: pre;
+      overflow: auto;
+    }
+    textarea::placeholder { color: var(--text-dim); }
+
+    /* ─── Drag & Drop highlight ─── */
+    .editor-pane.drag-over textarea {
+      background: var(--surface2);
+      box-shadow: inset 0 0 0 2px var(--accent-preview);
+    }
+
+    /* ─── Preview pane ─── */
+    .preview-pane {
+      display: flex;
+      flex-direction: column;
+      min-width: 200px;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .preview-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      height: var(--tab-h);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .preview-header .lang-badge { background: #1a3020; color: var(--accent-preview); }
+
+    #preview-iframe {
+      flex: 1;
+      border: none;
+      background: #fff;
+    }
+
+    /* ─── Error console ─── */
+    .console-bar {
+      height: 5px;
+      background: var(--border);
+      cursor: row-resize;
+      flex-shrink: 0;
+      transition: background .15s;
+    }
+    .console-bar:hover, .console-bar.dragging { background: var(--accent-js); }
+
+    #console-panel {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      min-height: 28px;
+      overflow: hidden;
+    }
+
+    .console-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      height: 28px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      cursor: pointer;
+      user-select: none;
+    }
+    .console-header span { font-size: 11px; font-weight: 600; color: var(--text-dim); letter-spacing: .06em; text-transform: uppercase; }
+    .error-badge {
+      font-size: 10px;
+      font-weight: 700;
+      background: var(--error);
+      color: #1e1e2e;
+      border-radius: 8px;
+      padding: 1px 6px;
+      display: none;
+    }
+    .error-badge.visible { display: inline-block; }
+
+    #console-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+
+    .log-entry {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 3px 12px;
+      font-family: 'Consolas', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      border-bottom: 1px solid transparent;
+    }
+    .log-entry:hover { background: var(--surface2); }
+    .log-entry.error { color: var(--error); background: #2a1015; }
+    .log-entry.warn  { color: var(--warn);  background: #2a1a08; }
+    .log-entry.info  { color: var(--accent-css); }
+    .log-entry.log   { color: var(--text); }
+
+    .log-icon { flex-shrink: 0; width: 14px; text-align: center; }
+    .log-source { flex-shrink: 0; color: var(--text-dim); font-size: 10px; min-width: 40px; padding-top: 2px; }
+    .log-msg { word-break: break-all; white-space: pre-wrap; }
+
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--ok);
+      flex-shrink: 0;
+      transition: background .2s;
+    }
+    .status-dot.error { background: var(--error); }
+    .status-dot.warn  { background: var(--warn); }
+
+    /* ─── Collapsed console ─── */
+    #console-panel.collapsed #console-list { display: none; }
+    #console-panel.collapsed { min-height: 28px !important; }
+
+    .toggle-arrow { font-size: 10px; color: var(--text-dim); margin-left: auto; }
+
+    /* ─── Mobile layout ─── */
+    @media (max-width: 768px) {
+      :root { --tab-h: 44px; }
+
+      body { height: 100dvh; }
+
+      header { height: 44px; padding: 0 12px; }
+      header h1 { font-size: 13px; }
+      .btn { padding: 6px 10px; font-size: 11px; }
+
+      /* Hide desktop resizers */
+      .resizer-v, .resizer-h { display: none; }
+
+      /* Top row: full height, column direction */
+      .pane-row {
+        flex-direction: column;
+        position: relative;
+      }
+
+      /* Each panel fills full area; hidden by default */
+      .editor-pane, .preview-pane {
+        position: absolute;
+        inset: 0;
+        min-width: unset;
+        min-height: unset;
+        flex: unset !important;
+        display: none;
+      }
+      .editor-pane.mobile-active,
+      .preview-pane.mobile-active { display: flex; }
+
+      /* Console: fixed height at bottom of top-row, no resize */
+      #top-row {
+        flex: 1 !important;
+        position: relative;
+      }
+
+      #rh-console { display: none; }
+
+      #console-panel {
+        height: 120px !important;
+        flex-shrink: 0;
+      }
+      #console-panel.collapsed { height: 28px !important; }
+
+      /* Bottom tab bar */
+      #mobile-tabs {
+        display: flex;
+        flex-shrink: 0;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        height: 52px;
+      }
+      .mobile-tab {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        border: none;
+        background: transparent;
+        color: var(--text-dim);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: .06em;
+        cursor: pointer;
+        transition: color .15s, background .15s;
+        padding: 6px 0;
+        position: relative;
+      }
+      .mobile-tab .tab-dot {
+        width: 20px; height: 3px;
+        border-radius: 2px;
+        background: transparent;
+        transition: background .15s;
+      }
+      .mobile-tab.active { color: var(--text); }
+      .mobile-tab.html.active .tab-dot  { background: var(--accent-html); }
+      .mobile-tab.css.active .tab-dot   { background: var(--accent-css); }
+      .mobile-tab.js.active .tab-dot    { background: var(--accent-js); }
+      .mobile-tab.prev.active .tab-dot  { background: var(--accent-preview); }
+
+      /* Textarea bigger font for mobile */
+      textarea { font-size: 14px; }
+
+      /* Pane header char count: shorter text */
+      .char-count { font-size: 10px; }
+    }
+
+    /* Desktop: hide mobile tabs */
+    @media (min-width: 769px) {
+      #mobile-tabs { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="dot"></div>
+  <h1>Live Code Preview</h1>
+  <div class="header-actions">
+    <button class="btn primary" id="btn-open-file" title="ファイルを開く（.html / .css / .js）">開く</button>
+    <button class="btn" id="btn-copy-all" title="全コードをコピー">コピー</button>
+    <button class="btn danger" id="btn-clear-all" title="全クリア">クリア</button>
+  </div>
+  <!-- 非表示のファイル選択。「開く」ボタンから呼び出す -->
+  <input type="file" id="file-input" accept=".html,.htm,.css,.js,.txt" multiple style="display:none;">
+</header>
+
+<div class="workspace" id="workspace">
+
+  <!-- Top row: editors + preview -->
+  <div class="pane-row" id="top-row" style="flex: 0 0 65%;">
+
+    <!-- HTML editor -->
+    <div class="editor-pane html" id="pane-html" style="flex: 1;">
+      <div class="pane-header">
+        <span class="lang-badge">HTML</span>
+        <span class="char-count" id="count-html">0 文字</span>
+      </div>
+      <textarea id="code-html" placeholder="HTML を入力...（ファイルをここにドロップしてもOK）" spellcheck="false"></textarea>
+    </div>
+
+    <div class="resizer-v" id="rv1"></div>
+
+    <!-- CSS editor -->
+    <div class="editor-pane css" id="pane-css" style="flex: 1;">
+      <div class="pane-header">
+        <span class="lang-badge">CSS</span>
+        <span class="char-count" id="count-css">0 文字</span>
+      </div>
+      <textarea id="code-css" placeholder="CSS を入力...（ファイルをここにドロップしてもOK）" spellcheck="false"></textarea>
+    </div>
+
+    <div class="resizer-v" id="rv2"></div>
+
+    <!-- JS editor -->
+    <div class="editor-pane js" id="pane-js" style="flex: 1;">
+      <div class="pane-header">
+        <span class="lang-badge">JS</span>
+        <span class="char-count" id="count-js">0 文字</span>
+      </div>
+      <textarea id="code-js" placeholder="JavaScript を入力...（ファイルをここにドロップしてもOK）" spellcheck="false"></textarea>
+    </div>
+
+    <div class="resizer-v" id="rv3"></div>
+
+    <!-- Preview -->
+    <div class="preview-pane" id="pane-preview" style="flex: 2;">
+      <div class="preview-header">
+        <span class="lang-badge">PREVIEW</span>
+        <div class="status-dot" id="status-dot"></div>
+        <span class="char-count" id="status-text">Ready</span>
+      </div>
+      <iframe id="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
+    </div>
+  </div>
+
+  <!-- Horizontal resizer -->
+  <div class="resizer-h" id="rh-console"></div>
+
+  <!-- Console -->
+  <div id="console-panel" style="height: 140px;" class="collapsed">
+    <div class="console-header" id="console-toggle">
+      <span>Console</span>
+      <span class="error-badge" id="error-badge">0</span>
+      <div class="status-dot" id="console-dot"></div>
+      <span class="toggle-arrow" id="toggle-arrow">▼</span>
+    </div>
+    <div id="console-list"></div>
+  </div>
+
+  <!-- Mobile bottom tab bar -->
+  <nav id="mobile-tabs">
+    <button class="mobile-tab html active" data-target="pane-html">
+      <div class="tab-dot"></div>
+      HTML
+    </button>
+    <button class="mobile-tab css" data-target="pane-css">
+      <div class="tab-dot"></div>
+      CSS
+    </button>
+    <button class="mobile-tab js" data-target="pane-js">
+      <div class="tab-dot"></div>
+      JS
+    </button>
+    <button class="mobile-tab prev" data-target="pane-preview">
+      <div class="tab-dot"></div>
+      PREVIEW
+    </button>
+  </nav>
+
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+
+  const htmlTA = $('code-html');
+  const cssTA  = $('code-css');
+  const jsTA   = $('code-js');
+  const iframe = $('preview-iframe');
+  const consoleList = $('console-list');
+  const errorBadge  = $('error-badge');
+  const statusDot   = $('status-dot');
+  const consoleDot  = $('console-dot');
+  const statusText  = $('status-text');
+
+  // ── Character counts ──────────────────────────────────
+  function updateCount(ta, el) {
+    const len = ta.value.length;
+    const bytes = new TextEncoder().encode(ta.value).length;
+    el.textContent = `${len.toLocaleString()} 文字 / ${bytes.toLocaleString()} B`;
+  }
+
+  // Excel CSV quoting: outer "..." wrapper + doubled "" → "
+  function stripExcelQuotes(text) {
+    let s = text;
+    // Remove leading/trailing whitespace before checking
+    const trimmed = s.trim();
+    // Pattern: starts with " and ends with " (Excel CSV wrapping)
+    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+      // Strip outer quotes, then unescape doubled quotes
+      s = trimmed.slice(1, -1).replace(/""/g, '"');
+    }
+    return s;
+  }
+
+  ['html','css','js'].forEach(lang => {
+    const ta  = $(`code-${lang}`);
+    const cnt = $(`count-${lang}`);
+    ta.addEventListener('input', () => {
+      updateCount(ta, cnt);
+      scheduleUpdate();
+    });
+    // Strip Excel CSV quoting on paste
+    ta.addEventListener('paste', e => {
+      const raw = (e.clipboardData || window.clipboardData).getData('text');
+      const cleaned = stripExcelQuotes(raw);
+      if (cleaned !== raw) {
+        e.preventDefault();
+        const start = ta.selectionStart;
+        const end   = ta.selectionEnd;
+        ta.value = ta.value.slice(0, start) + cleaned + ta.value.slice(end);
+        ta.selectionStart = ta.selectionEnd = start + cleaned.length;
+        updateCount(ta, cnt);
+        scheduleUpdate();
+        showPasteToast('Excel引用符を自動除去しました');
+      }
+    });
+    // Tab key support
+    ta.addEventListener('keydown', e => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const s = ta.selectionStart, end = ta.selectionEnd;
+        ta.value = ta.value.slice(0, s) + '  ' + ta.value.slice(end);
+        ta.selectionStart = ta.selectionEnd = s + 2;
+      }
+    });
+  });
+
+  // ══════════════════════════════════════════════════════
+  // ★ 新機能: ファイルを開く
+  // ══════════════════════════════════════════════════════
+
+  // 拡張子から「どのエディタに入れるか」を判定する
+  function detectLang(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    if (ext === 'html' || ext === 'htm') return 'html';
+    if (ext === 'css') return 'css';
+    if (ext === 'js')  return 'js';
+    return null; // .txt など → どこに入れるか不明
+  }
+
+  // ファイルを読み込んで、指定のエディタに入れる
+  function loadFileInto(file, lang) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const ta  = $(`code-${lang}`);
+      const cnt = $(`count-${lang}`);
+      ta.value = reader.result;
+      updateCount(ta, cnt);
+      scheduleUpdate();
+      showPasteToast(`${file.name} を ${lang.toUpperCase()} に読み込みました`);
+    };
+    reader.onerror = () => {
+      showPasteToast(`${file.name} の読み込みに失敗しました`);
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  // 複数ファイルを受け取って、拡張子ごとに振り分ける
+  function handleFiles(fileList) {
+    const files = Array.from(fileList);
+    if (files.length === 0) return;
+
+    files.forEach(file => {
+      const lang = detectLang(file.name);
+      if (lang) {
+        loadFileInto(file, lang);
+      } else {
+        // 拡張子が不明な場合（.txtなど）→ HTMLに入れるか確認
+        if (confirm(`「${file.name}」は拡張子から種類を判別できません。\nHTMLエディタに読み込みますか？`)) {
+          loadFileInto(file, 'html');
+        }
+      }
+    });
+  }
+
+  // 「開く」ボタン → 隠しファイル入力をクリック
+  const fileInput = $('file-input');
+  $('btn-open-file').addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', () => {
+    handleFiles(fileInput.files);
+    fileInput.value = ''; // 同じファイルをもう一度選べるようにリセット
+  });
+
+  // ── ドラッグ&ドロップでも開けるようにする ──
+  // 各エディタ枠にドロップ → そのエディタに読み込む（拡張子は問わない）
+  [['pane-html','html'], ['pane-css','css'], ['pane-js','js']].forEach(([paneId, lang]) => {
+    const pane = $(paneId);
+
+    pane.addEventListener('dragover', e => {
+      e.preventDefault(); // これがないとドロップできない
+      pane.classList.add('drag-over');
+    });
+    pane.addEventListener('dragleave', () => {
+      pane.classList.remove('drag-over');
+    });
+    pane.addEventListener('drop', e => {
+      e.preventDefault();
+      pane.classList.remove('drag-over');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        // ドロップ先のエディタに直接読み込む（最初の1ファイルのみ）
+        loadFileInto(files[0], lang);
+        // 2ファイル以上ドロップされたら、残りは拡張子で自動振り分け
+        if (files.length > 1) {
+          handleFiles(Array.from(files).slice(1));
+        }
+      }
+    });
+  });
+
+  // ページ全体へのドロップで誤ってファイルが開かれるのを防ぐ
+  window.addEventListener('dragover', e => e.preventDefault());
+  window.addEventListener('drop', e => e.preventDefault());
+
+  // ══════════════════════════════════════════════════════
+  // ここまで新機能
+  // ══════════════════════════════════════════════════════
+
+  // ── Preview update ────────────────────────────────────
+  let timer = null;
+  let errorCount = 0;
+
+  function scheduleUpdate() {
+    clearTimeout(timer);
+    timer = setTimeout(updatePreview, 300);
+  }
+
+  function updatePreview() {
+    const html = htmlTA.value;
+    const css  = cssTA.value;
+    const js   = jsTA.value;
+
+    errorCount = 0;
+    clearConsole();
+
+    // Build intercepted JS that proxies console & catches errors
+    const injectedJS = `
+<script>
+(function(){
+  var _post = function(type, args) {
+    var msgs = Array.prototype.map.call(args, function(a) {
+      try { return typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a); }
+      catch(e) { return String(a); }
+    });
+    window.parent.postMessage({__liveConsole: true, type: type, msg: msgs.join(' ')}, '*');
+  };
+  ['log','info','warn','error'].forEach(function(m){
+    var orig = console[m].bind(console);
+    console[m] = function() { orig.apply(console, arguments); _post(m, arguments); };
+  });
+  window.addEventListener('error', function(e) {
+    _post('error', [e.message + (e.filename ? ' (' + (e.lineno||'?') + ':' + (e.colno||'?') + ')' : '')]);
+  });
+  window.addEventListener('unhandledrejection', function(e) {
+    _post('error', ['Unhandled Promise: ' + (e.reason && e.reason.message || e.reason)]);
+  });
+})();
+<\/script>`;
+
+    const doc = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>${css}</style>
+</head>
+<body>
+${html}
+${injectedJS}
+<script>
+try {
+${js}
+} catch(e) {
+  console.error(e.message);
+}
+<\/script>
+</body>
+</html>`;
+
+    iframe.srcdoc = doc;
+    setStatus('ok', '更新済み ' + new Date().toLocaleTimeString('ja-JP'));
+  }
+
+  // ── Console messages from iframe ──────────────────────
+  window.addEventListener('message', e => {
+    if (!e.data || !e.data.__liveConsole) return;
+    addLog(e.data.type, e.data.msg, 'iframe');
+    if (e.data.type === 'error') {
+      errorCount++;
+      setStatus('error', `エラー ${errorCount} 件`);
+    }
+    updateBadge();
+  });
+
+  function addLog(type, msg, source) {
+    const icons = { log:'·', info:'ℹ', warn:'⚠', error:'✖' };
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${type}`;
+    entry.innerHTML = `
+      <span class="log-icon">${icons[type] || '·'}</span>
+      <span class="log-source">${source}</span>
+      <span class="log-msg">${escHtml(msg)}</span>`;
+    consoleList.appendChild(entry);
+    consoleList.scrollTop = consoleList.scrollHeight;
+  }
+
+  function clearConsole() {
+    consoleList.innerHTML = '';
+    errorCount = 0;
+    updateBadge();
+  }
+
+  function updateBadge() {
+    if (errorCount > 0) {
+      errorBadge.textContent = errorCount;
+      errorBadge.classList.add('visible');
+      consoleDot.className = 'status-dot error';
+    } else {
+      errorBadge.classList.remove('visible');
+      consoleDot.className = 'status-dot';
+    }
+  }
+
+  function setStatus(state, text) {
+    statusText.textContent = text;
+    statusDot.className = 'status-dot' + (state !== 'ok' ? ` ${state}` : '');
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Console toggle ────────────────────────────────────
+  const consolePanel = $('console-panel');
+  const toggleArrow  = $('toggle-arrow');
+  $('console-toggle').addEventListener('click', () => {
+    consolePanel.classList.toggle('collapsed');
+    toggleArrow.textContent = consolePanel.classList.contains('collapsed') ? '▶' : '▼';
+  });
+
+  // ── Resizers ──────────────────────────────────────────
+  function makeVResizer(id, leftId, rightId) {
+    const rz = $(id);
+    let startX, leftW, rightW;
+    rz.addEventListener('mousedown', e => {
+      startX = e.clientX;
+      leftW  = $(leftId).getBoundingClientRect().width;
+      rightW = $(rightId).getBoundingClientRect().width;
+      rz.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      const onMove = mv => {
+        const dx = mv.clientX - startX;
+        const newL = Math.max(80, leftW + dx);
+        const newR = Math.max(80, rightW - dx);
+        $(leftId).style.flex  = `0 0 ${newL}px`;
+        $(rightId).style.flex = `0 0 ${newR}px`;
+      };
+      const onUp = () => {
+        rz.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    });
+  }
+
+  function makeHResizer(id, topId, bottomId) {
+    const rz = $(id);
+    let startY, topH, bottomH;
+    rz.addEventListener('mousedown', e => {
+      startY  = e.clientY;
+      topH    = $(topId).getBoundingClientRect().height;
+      bottomH = $(bottomId).getBoundingClientRect().height;
+      rz.classList.add('dragging');
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+      const onMove = mv => {
+        const dy = mv.clientY - startY;
+        const newT = Math.max(100, topH + dy);
+        const newB = Math.max(28, bottomH - dy);
+        $(topId).style.flex = `0 0 ${newT}px`;
+        $(bottomId).style.height = `${newB}px`;
+      };
+      const onUp = () => {
+        rz.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    });
+  }
+
+  makeVResizer('rv1', 'pane-html', 'pane-css');
+  makeVResizer('rv2', 'pane-css',  'pane-js');
+  makeVResizer('rv3', 'pane-js',   'pane-preview');
+  makeHResizer('rh-console', 'top-row', 'console-panel');
+
+  // ── Buttons ───────────────────────────────────────────
+  $('btn-clear-all').addEventListener('click', () => {
+    if (!confirm('全エディタの内容をクリアしますか?')) return;
+    htmlTA.value = cssTA.value = jsTA.value = '';
+    ['html','css','js'].forEach(l => updateCount($(`code-${l}`), $(`count-${l}`)));
+    clearConsole();
+    updatePreview();
+  });
+
+  $('btn-copy-all').addEventListener('click', () => {
+    const all = `<!-- HTML -->\n${htmlTA.value}\n\n/* CSS */\n${cssTA.value}\n\n// JS\n${jsTA.value}`;
+    navigator.clipboard.writeText(all).then(() => {
+      const btn = $('btn-copy-all');
+      btn.textContent = 'コピー完了!';
+      setTimeout(() => btn.textContent = 'コピー', 1500);
+    });
+  });
+
+  // ── Paste toast notification ─────────────────────────
+  let toastTimer = null;
+  function showPasteToast(msg) {
+    let toast = document.getElementById('paste-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'paste-toast';
+      toast.style.cssText = `
+        position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+        background:#a6e3a1; color:#1e1e2e; font-size:12px; font-weight:600;
+        padding:7px 16px; border-radius:20px; z-index:9999;
+        box-shadow:0 2px 12px rgba(0,0,0,.4); pointer-events:none;
+        transition:opacity .3s;
+      `;
+      document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.opacity = '1';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 2000);
+  }
+
+  // ── Mobile tab switching ──────────────────────────────
+  const mobileTabs = document.querySelectorAll('.mobile-tab');
+  const allPanes   = ['pane-html','pane-css','pane-js','pane-preview'];
+
+  function isMobile() { return window.innerWidth <= 768; }
+
+  function initMobileLayout() {
+    if (!isMobile()) return;
+    // Set first pane active
+    allPanes.forEach((id, i) => {
+      const el = $(id);
+      el.classList.toggle('mobile-active', i === 0);
+    });
+  }
+
+  function switchMobileTab(targetId) {
+    allPanes.forEach(id => $(id).classList.remove('mobile-active'));
+    $(targetId).classList.add('mobile-active');
+    mobileTabs.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.target === targetId);
+    });
+    // Auto-update preview when switching to it
+    if (targetId === 'pane-preview') scheduleUpdate();
+  }
+
+  mobileTabs.forEach(btn => {
+    btn.addEventListener('click', () => switchMobileTab(btn.dataset.target));
+  });
+
+  // Re-apply on resize
+  window.addEventListener('resize', () => {
+    if (!isMobile()) {
+      allPanes.forEach(id => $(id).classList.remove('mobile-active'));
+    } else {
+      const active = document.querySelector('.mobile-tab.active');
+      if (active) switchMobileTab(active.dataset.target);
+    }
+  });
+
+  // ── Initial state ─────────────────────────────────────
+  htmlTA.value = `<h1>Hello, World!</h1>
+<p id="msg">ここに文字が入ります</p>
+<button onclick="changeColor()">色を変える</button>`;
+
+  cssTA.value = `body {
+  font-family: sans-serif;
+  padding: 24px;
+  background: #f0f4ff;
+}
+h1 { color: #4f46e5; }
+button {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: #4f46e5;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}`;
+
+  jsTA.value = `function changeColor() {
+  const colors = ['#4f46e5','#e54f4f','#4fe57e','#e5a84f'];
+  const h1 = document.querySelector('h1');
+  const i = Math.floor(Math.random() * colors.length);
+  h1.style.color = colors[i];
+  console.log('色を変更:', colors[i]);
+}
+
+console.log('スクリプト読み込み完了');`;
+
+  ['html','css','js'].forEach(l => updateCount($(`code-${l}`), $(`count-${l}`)));
+  initMobileLayout();
+  updatePreview();
+
+})();
+</script>
+</body>
+</html>
