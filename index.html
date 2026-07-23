@@ -160,6 +160,7 @@
       font-size: 11px;
       color: var(--text-dim);
       margin-left: auto;
+      white-space: nowrap;
     }
 
     /* ─── Editor tabs (HTML/CSS/JS switcher) ─── */
@@ -220,10 +221,59 @@
       flex-shrink: 0;
     }
 
-    #preview-iframe {
+    /* ─── PC / SP device switcher for the preview ─── */
+    .device-toggle {
+      display: flex;
+      gap: 2px;
+      background: var(--surface2);
+      border-radius: 6px;
+      padding: 2px;
+      flex-shrink: 0;
+    }
+    .device-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 9px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+      white-space: nowrap;
+    }
+    .device-btn:hover { color: var(--text); }
+    .device-btn.active { background: var(--surface); color: var(--accent-preview); }
+
+    .preview-body {
       flex: 1;
+      display: flex;
+      justify-content: center;
+      overflow: auto;
+      background: var(--surface);
+    }
+
+    #preview-iframe {
+      flex-shrink: 0;
+      width: 100%;
+      height: 100%;
       border: none;
       background: #fff;
+    }
+
+    /* SP mode: force a narrow phone-width viewport, centered */
+    .preview-body.device-mobile {
+      padding: 16px 0;
+    }
+    .preview-body.device-mobile #preview-iframe {
+      width: 375px;
+      max-width: 100%;
+      height: 100%;
+      border-radius: 18px;
+      box-shadow: 0 0 0 6px #11111a, 0 8px 24px rgba(0,0,0,.5);
     }
 
     /* ─── Error console (lives under the code pane only) ─── */
@@ -344,13 +394,19 @@
       }
       #console-panel.collapsed { height: 28px !important; }
 
+      /* Preview header gets tight on narrow phones: drop the timestamp text */
+      .preview-header #status-text { display: none; }
+      .device-btn { padding: 4px 7px; font-size: 10px; }
+
       /* Bottom tab bar */
       #mobile-tabs {
         display: flex;
         flex-shrink: 0;
         background: var(--surface);
         border-top: 1px solid var(--border);
-        height: 52px;
+        height: 56px;
+        padding: 4px 4px 0;
+        gap: 3px;
       }
       .mobile-tab {
         flex: 1;
@@ -358,29 +414,36 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 3px;
+        gap: 4px;
         border: none;
+        border-radius: 8px 8px 0 0;
         background: transparent;
         color: var(--text-dim);
         font-size: 10px;
         font-weight: 600;
         letter-spacing: .06em;
         cursor: pointer;
-        transition: color .15s, background .15s;
-        padding: 6px 0;
+        transition: background .15s, color .15s;
+        padding: 7px 0 8px;
         position: relative;
       }
+      .mobile-tab:active { background: var(--border); }
       .mobile-tab .tab-dot {
-        width: 20px; height: 3px;
+        width: 20px; height: 4px;
         border-radius: 2px;
-        background: transparent;
-        transition: background .15s;
+        opacity: .35;
+        transition: opacity .15s;
       }
-      .mobile-tab.active { color: var(--text); }
-      .mobile-tab.html.active .tab-dot  { background: var(--accent-html); }
-      .mobile-tab.css.active .tab-dot   { background: var(--accent-css); }
-      .mobile-tab.js.active .tab-dot    { background: var(--accent-js); }
-      .mobile-tab.prev.active .tab-dot  { background: var(--accent-preview); }
+      .mobile-tab.html .tab-dot { background: var(--accent-html); }
+      .mobile-tab.css  .tab-dot { background: var(--accent-css); }
+      .mobile-tab.js   .tab-dot { background: var(--accent-js); }
+      .mobile-tab.prev .tab-dot { background: var(--accent-preview); }
+
+      .mobile-tab.active {
+        color: var(--text);
+        background: var(--surface2);
+      }
+      .mobile-tab.active .tab-dot { opacity: 1; }
 
       /* Textarea bigger font for mobile */
       textarea { font-size: 14px; }
@@ -449,10 +512,16 @@
     <div class="preview-pane" id="pane-preview" style="flex: 1;">
       <div class="preview-header">
         <span class="lang-badge preview">PREVIEW</span>
+        <div class="device-toggle" id="device-toggle">
+          <button class="device-btn active" data-device="pc" title="PC表示で確認">🖥 PC</button>
+          <button class="device-btn" data-device="mobile" title="スマホ表示で確認">📱 SP</button>
+        </div>
         <div class="status-dot" id="status-dot"></div>
         <span class="char-count" id="status-text">Ready</span>
       </div>
-      <iframe id="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
+      <div class="preview-body" id="preview-body">
+        <iframe id="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
+      </div>
     </div>
   </div>
 
@@ -565,6 +634,17 @@
 
   editorTabs.forEach(btn => {
     btn.addEventListener('click', () => switchEditorLang(btn.dataset.lang));
+  });
+
+  // ── Preview device switcher (PC / SP) ──────────────────
+  const previewBody = $('preview-body');
+  const deviceBtns = document.querySelectorAll('.device-btn');
+
+  deviceBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      deviceBtns.forEach(b => b.classList.toggle('active', b === btn));
+      previewBody.classList.toggle('device-mobile', btn.dataset.device === 'mobile');
+    });
   });
 
   // ══════════════════════════════════════════════════════
