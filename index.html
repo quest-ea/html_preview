@@ -71,8 +71,6 @@
     .btn:hover { background: var(--border); }
     .btn.danger { border-color: var(--error); color: var(--error); }
     .btn.danger:hover { background: #3d1a20; }
-    .btn.primary { border-color: var(--accent-preview); color: var(--accent-preview); }
-    .btn.primary:hover { background: #1a3020; }
 
     /* ─── Layout ─── */
     .workspace {
@@ -111,8 +109,9 @@
     .editor-pane {
       display: flex;
       flex-direction: column;
-      min-width: 120px;
+      min-width: 200px;
       min-height: var(--editor-min);
+      flex: 1;
       overflow: hidden;
     }
 
@@ -134,15 +133,38 @@
       text-transform: uppercase;
       padding: 2px 7px;
       border-radius: 4px;
+      pointer-events: none;
     }
-    .html .lang-badge { background: #3d1a20; color: var(--accent-html); }
-    .css  .lang-badge { background: #1a2540; color: var(--accent-css); }
-    .js   .lang-badge { background: #3d3010; color: var(--accent-js); }
+    .lang-badge.html { background: #3d1a20; color: var(--accent-html); }
+    .lang-badge.css  { background: #1a2540; color: var(--accent-css); }
+    .lang-badge.js   { background: #3d3010; color: var(--accent-js); }
+    .lang-badge.preview { background: #1a3020; color: var(--accent-preview); }
 
     .char-count {
       font-size: 11px;
       color: var(--text-dim);
       margin-left: auto;
+    }
+
+    /* ─── Editor tabs (HTML/CSS/JS switcher) ─── */
+    #editor-tabs { gap: 4px; }
+    .tab-btn {
+      display: flex;
+      align-items: center;
+      background: transparent;
+      border: none;
+      padding: 6px 2px;
+      cursor: pointer;
+      opacity: .5;
+      transition: opacity .15s;
+    }
+    .tab-btn:hover { opacity: .8; }
+    .tab-btn.active { opacity: 1; }
+
+    .code-area { display: none; }
+    .code-area.active {
+      display: block;
+      flex: 1;
     }
 
     textarea {
@@ -161,12 +183,6 @@
       overflow: auto;
     }
     textarea::placeholder { color: var(--text-dim); }
-
-    /* ─── Drag & Drop highlight ─── */
-    .editor-pane.drag-over textarea {
-      background: var(--surface2);
-      box-shadow: inset 0 0 0 2px var(--accent-preview);
-    }
 
     /* ─── Preview pane ─── */
     .preview-pane {
@@ -187,7 +203,6 @@
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
     }
-    .preview-header .lang-badge { background: #1a3020; color: var(--accent-preview); }
 
     #preview-iframe {
       flex: 1;
@@ -382,56 +397,35 @@
   <div class="dot"></div>
   <h1>Live Code Preview</h1>
   <div class="header-actions">
-    <button class="btn primary" id="btn-open-file" title="ファイルを開く（.html / .css / .js）">開く</button>
     <button class="btn" id="btn-copy-all" title="全コードをコピー">コピー</button>
     <button class="btn danger" id="btn-clear-all" title="全クリア">クリア</button>
   </div>
-  <!-- 非表示のファイル選択。「開く」ボタンから呼び出す -->
-  <input type="file" id="file-input" accept=".html,.htm,.css,.js,.txt" multiple style="display:none;">
 </header>
 
 <div class="workspace" id="workspace">
 
-  <!-- Top row: editors + preview -->
+  <!-- Top row: editor + preview -->
   <div class="pane-row" id="top-row" style="flex: 0 0 65%;">
 
-    <!-- HTML editor -->
-    <div class="editor-pane html" id="pane-html" style="flex: 1;">
-      <div class="pane-header">
-        <span class="lang-badge">HTML</span>
-        <span class="char-count" id="count-html">0 文字</span>
+    <!-- Code editor (HTML/CSS/JS tabs) -->
+    <div class="editor-pane" id="pane-editor" style="flex: 1;">
+      <div class="pane-header" id="editor-tabs">
+        <button class="tab-btn active" data-lang="html"><span class="lang-badge html">HTML</span></button>
+        <button class="tab-btn" data-lang="css"><span class="lang-badge css">CSS</span></button>
+        <button class="tab-btn" data-lang="js"><span class="lang-badge js">JS</span></button>
+        <span class="char-count" id="count-active">0 文字</span>
       </div>
-      <textarea id="code-html" placeholder="HTML を入力...（ファイルをここにドロップしてもOK）" spellcheck="false"></textarea>
+      <textarea id="code-html" class="code-area active" data-lang="html" placeholder="HTML を入力..." spellcheck="false"></textarea>
+      <textarea id="code-css" class="code-area" data-lang="css" placeholder="CSS を入力..." spellcheck="false"></textarea>
+      <textarea id="code-js" class="code-area" data-lang="js" placeholder="JavaScript を入力..." spellcheck="false"></textarea>
     </div>
 
     <div class="resizer-v" id="rv1"></div>
 
-    <!-- CSS editor -->
-    <div class="editor-pane css" id="pane-css" style="flex: 1;">
-      <div class="pane-header">
-        <span class="lang-badge">CSS</span>
-        <span class="char-count" id="count-css">0 文字</span>
-      </div>
-      <textarea id="code-css" placeholder="CSS を入力...（ファイルをここにドロップしてもOK）" spellcheck="false"></textarea>
-    </div>
-
-    <div class="resizer-v" id="rv2"></div>
-
-    <!-- JS editor -->
-    <div class="editor-pane js" id="pane-js" style="flex: 1;">
-      <div class="pane-header">
-        <span class="lang-badge">JS</span>
-        <span class="char-count" id="count-js">0 文字</span>
-      </div>
-      <textarea id="code-js" placeholder="JavaScript を入力...（ファイルをここにドロップしてもOK）" spellcheck="false"></textarea>
-    </div>
-
-    <div class="resizer-v" id="rv3"></div>
-
     <!-- Preview -->
-    <div class="preview-pane" id="pane-preview" style="flex: 2;">
+    <div class="preview-pane" id="pane-preview" style="flex: 1;">
       <div class="preview-header">
-        <span class="lang-badge">PREVIEW</span>
+        <span class="lang-badge preview">PREVIEW</span>
         <div class="status-dot" id="status-dot"></div>
         <span class="char-count" id="status-text">Ready</span>
       </div>
@@ -455,15 +449,15 @@
 
   <!-- Mobile bottom tab bar -->
   <nav id="mobile-tabs">
-    <button class="mobile-tab html active" data-target="pane-html">
+    <button class="mobile-tab html active" data-target="pane-editor" data-lang="html">
       <div class="tab-dot"></div>
       HTML
     </button>
-    <button class="mobile-tab css" data-target="pane-css">
+    <button class="mobile-tab css" data-target="pane-editor" data-lang="css">
       <div class="tab-dot"></div>
       CSS
     </button>
-    <button class="mobile-tab js" data-target="pane-js">
+    <button class="mobile-tab js" data-target="pane-editor" data-lang="js">
       <div class="tab-dot"></div>
       JS
     </button>
@@ -492,10 +486,17 @@
   const statusText  = $('status-text');
 
   // ── Character counts ──────────────────────────────────
+  const countActiveEl = $('count-active');
+
   function updateCount(ta, el) {
     const len = ta.value.length;
     const bytes = new TextEncoder().encode(ta.value).length;
     el.textContent = `${len.toLocaleString()} 文字 / ${bytes.toLocaleString()} B`;
+  }
+
+  function refreshActiveCount() {
+    const activeTa = document.querySelector('.code-area.active');
+    if (activeTa) updateCount(activeTa, countActiveEl);
   }
 
   // Excel CSV quoting: outer "..." wrapper + doubled "" → "
@@ -513,9 +514,8 @@
 
   ['html','css','js'].forEach(lang => {
     const ta  = $(`code-${lang}`);
-    const cnt = $(`count-${lang}`);
     ta.addEventListener('input', () => {
-      updateCount(ta, cnt);
+      refreshActiveCount();
       scheduleUpdate();
     });
     // Strip Excel CSV quoting on paste
@@ -528,7 +528,7 @@
         const end   = ta.selectionEnd;
         ta.value = ta.value.slice(0, start) + cleaned + ta.value.slice(end);
         ta.selectionStart = ta.selectionEnd = start + cleaned.length;
-        updateCount(ta, cnt);
+        refreshActiveCount();
         scheduleUpdate();
         showPasteToast('Excel引用符を自動除去しました');
       }
@@ -544,97 +544,19 @@
     });
   });
 
-  // ══════════════════════════════════════════════════════
-  // ★ 新機能: ファイルを開く
-  // ══════════════════════════════════════════════════════
+  // ── Editor tab switching (HTML/CSS/JS) ────────────────
+  const editorTabs = document.querySelectorAll('#editor-tabs .tab-btn');
+  const codeAreas  = document.querySelectorAll('.code-area');
 
-  // 拡張子から「どのエディタに入れるか」を判定する
-  function detectLang(filename) {
-    const ext = filename.split('.').pop().toLowerCase();
-    if (ext === 'html' || ext === 'htm') return 'html';
-    if (ext === 'css') return 'css';
-    if (ext === 'js')  return 'js';
-    return null; // .txt など → どこに入れるか不明
+  function switchEditorLang(lang) {
+    codeAreas.forEach(ta => ta.classList.toggle('active', ta.dataset.lang === lang));
+    editorTabs.forEach(btn => btn.classList.toggle('active', btn.dataset.lang === lang));
+    refreshActiveCount();
   }
 
-  // ファイルを読み込んで、指定のエディタに入れる
-  function loadFileInto(file, lang) {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const ta  = $(`code-${lang}`);
-      const cnt = $(`count-${lang}`);
-      ta.value = reader.result;
-      updateCount(ta, cnt);
-      scheduleUpdate();
-      showPasteToast(`${file.name} を ${lang.toUpperCase()} に読み込みました`);
-    };
-    reader.onerror = () => {
-      showPasteToast(`${file.name} の読み込みに失敗しました`);
-    };
-    reader.readAsText(file, 'UTF-8');
-  }
-
-  // 複数ファイルを受け取って、拡張子ごとに振り分ける
-  function handleFiles(fileList) {
-    const files = Array.from(fileList);
-    if (files.length === 0) return;
-
-    files.forEach(file => {
-      const lang = detectLang(file.name);
-      if (lang) {
-        loadFileInto(file, lang);
-      } else {
-        // 拡張子が不明な場合（.txtなど）→ HTMLに入れるか確認
-        if (confirm(`「${file.name}」は拡張子から種類を判別できません。\nHTMLエディタに読み込みますか？`)) {
-          loadFileInto(file, 'html');
-        }
-      }
-    });
-  }
-
-  // 「開く」ボタン → 隠しファイル入力をクリック
-  const fileInput = $('file-input');
-  $('btn-open-file').addEventListener('click', () => fileInput.click());
-
-  fileInput.addEventListener('change', () => {
-    handleFiles(fileInput.files);
-    fileInput.value = ''; // 同じファイルをもう一度選べるようにリセット
+  editorTabs.forEach(btn => {
+    btn.addEventListener('click', () => switchEditorLang(btn.dataset.lang));
   });
-
-  // ── ドラッグ&ドロップでも開けるようにする ──
-  // 各エディタ枠にドロップ → そのエディタに読み込む（拡張子は問わない）
-  [['pane-html','html'], ['pane-css','css'], ['pane-js','js']].forEach(([paneId, lang]) => {
-    const pane = $(paneId);
-
-    pane.addEventListener('dragover', e => {
-      e.preventDefault(); // これがないとドロップできない
-      pane.classList.add('drag-over');
-    });
-    pane.addEventListener('dragleave', () => {
-      pane.classList.remove('drag-over');
-    });
-    pane.addEventListener('drop', e => {
-      e.preventDefault();
-      pane.classList.remove('drag-over');
-      const files = e.dataTransfer.files;
-      if (files.length > 0) {
-        // ドロップ先のエディタに直接読み込む（最初の1ファイルのみ）
-        loadFileInto(files[0], lang);
-        // 2ファイル以上ドロップされたら、残りは拡張子で自動振り分け
-        if (files.length > 1) {
-          handleFiles(Array.from(files).slice(1));
-        }
-      }
-    });
-  });
-
-  // ページ全体へのドロップで誤ってファイルが開かれるのを防ぐ
-  window.addEventListener('dragover', e => e.preventDefault());
-  window.addEventListener('drop', e => e.preventDefault());
-
-  // ══════════════════════════════════════════════════════
-  // ここまで新機能
-  // ══════════════════════════════════════════════════════
 
   // ── Preview update ────────────────────────────────────
   let timer = null;
@@ -816,16 +738,14 @@ ${js}
     });
   }
 
-  makeVResizer('rv1', 'pane-html', 'pane-css');
-  makeVResizer('rv2', 'pane-css',  'pane-js');
-  makeVResizer('rv3', 'pane-js',   'pane-preview');
+  makeVResizer('rv1', 'pane-editor', 'pane-preview');
   makeHResizer('rh-console', 'top-row', 'console-panel');
 
   // ── Buttons ───────────────────────────────────────────
   $('btn-clear-all').addEventListener('click', () => {
     if (!confirm('全エディタの内容をクリアしますか?')) return;
     htmlTA.value = cssTA.value = jsTA.value = '';
-    ['html','css','js'].forEach(l => updateCount($(`code-${l}`), $(`count-${l}`)));
+    refreshActiveCount();
     clearConsole();
     updatePreview();
   });
@@ -863,7 +783,7 @@ ${js}
 
   // ── Mobile tab switching ──────────────────────────────
   const mobileTabs = document.querySelectorAll('.mobile-tab');
-  const allPanes   = ['pane-html','pane-css','pane-js','pane-preview'];
+  const allPanes   = ['pane-editor','pane-preview'];
 
   function isMobile() { return window.innerWidth <= 768; }
 
@@ -876,18 +796,18 @@ ${js}
     });
   }
 
-  function switchMobileTab(targetId) {
+  function switchMobileTab(btn) {
+    const targetId = btn.dataset.target;
     allPanes.forEach(id => $(id).classList.remove('mobile-active'));
     $(targetId).classList.add('mobile-active');
-    mobileTabs.forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.target === targetId);
-    });
+    mobileTabs.forEach(b => b.classList.toggle('active', b === btn));
+    if (btn.dataset.lang) switchEditorLang(btn.dataset.lang);
     // Auto-update preview when switching to it
     if (targetId === 'pane-preview') scheduleUpdate();
   }
 
   mobileTabs.forEach(btn => {
-    btn.addEventListener('click', () => switchMobileTab(btn.dataset.target));
+    btn.addEventListener('click', () => switchMobileTab(btn));
   });
 
   // Re-apply on resize
@@ -896,7 +816,7 @@ ${js}
       allPanes.forEach(id => $(id).classList.remove('mobile-active'));
     } else {
       const active = document.querySelector('.mobile-tab.active');
-      if (active) switchMobileTab(active.dataset.target);
+      if (active) switchMobileTab(active);
     }
   });
 
@@ -931,7 +851,7 @@ button {
 
 console.log('スクリプト読み込み完了');`;
 
-  ['html','css','js'].forEach(l => updateCount($(`code-${l}`), $(`count-${l}`)));
+  refreshActiveCount();
   initMobileLayout();
   updatePreview();
 
