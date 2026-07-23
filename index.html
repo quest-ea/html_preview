@@ -86,6 +86,15 @@
       min-height: 0;
     }
 
+    /* Left column: code editor stacked above its own console */
+    .left-column {
+      display: flex;
+      flex-direction: column;
+      min-width: 200px;
+      flex: 1;
+      overflow: hidden;
+    }
+
     /* ─── Resizer ─── */
     .resizer-h {
       height: 5px;
@@ -109,7 +118,6 @@
     .editor-pane {
       display: flex;
       flex-direction: column;
-      min-width: 200px;
       min-height: var(--editor-min);
       flex: 1;
       overflow: hidden;
@@ -210,16 +218,7 @@
       background: #fff;
     }
 
-    /* ─── Error console ─── */
-    .console-bar {
-      height: 5px;
-      background: var(--border);
-      cursor: row-resize;
-      flex-shrink: 0;
-      transition: background .15s;
-    }
-    .console-bar:hover, .console-bar.dragging { background: var(--accent-js); }
-
+    /* ─── Error console (lives under the code pane only) ─── */
     #console-panel {
       background: var(--surface);
       border-top: 1px solid var(--border);
@@ -314,8 +313,8 @@
         position: relative;
       }
 
-      /* Each panel fills full area; hidden by default */
-      .editor-pane, .preview-pane {
+      /* Left column (code+console) and preview fill full area; hidden by default */
+      .left-column, .preview-pane {
         position: absolute;
         inset: 0;
         min-width: unset;
@@ -323,16 +322,13 @@
         flex: unset !important;
         display: none;
       }
-      .editor-pane.mobile-active,
+      .left-column.mobile-active,
       .preview-pane.mobile-active { display: flex; }
 
-      /* Console: fixed height at bottom of top-row, no resize */
       #top-row {
         flex: 1 !important;
         position: relative;
       }
-
-      #rh-console { display: none; }
 
       #console-panel {
         height: 120px !important;
@@ -404,25 +400,41 @@
 
 <div class="workspace" id="workspace">
 
-  <!-- Top row: editor + preview -->
-  <div class="pane-row" id="top-row" style="flex: 0 0 65%;">
+  <!-- Top row: left column (editor+console) + preview -->
+  <div class="pane-row" id="top-row" style="flex: 1;">
 
-    <!-- Code editor (HTML/CSS/JS tabs) -->
-    <div class="editor-pane" id="pane-editor" style="flex: 1;">
-      <div class="pane-header" id="editor-tabs">
-        <button class="tab-btn active" data-lang="html"><span class="lang-badge html">HTML</span></button>
-        <button class="tab-btn" data-lang="css"><span class="lang-badge css">CSS</span></button>
-        <button class="tab-btn" data-lang="js"><span class="lang-badge js">JS</span></button>
-        <span class="char-count" id="count-active">0 文字</span>
+    <!-- Left column: code editor (HTML/CSS/JS tabs) + its console -->
+    <div class="left-column" id="left-column">
+      <div class="editor-pane" id="pane-editor" style="flex: 1;">
+        <div class="pane-header" id="editor-tabs">
+          <button class="tab-btn active" data-lang="html"><span class="lang-badge html">HTML</span></button>
+          <button class="tab-btn" data-lang="css"><span class="lang-badge css">CSS</span></button>
+          <button class="tab-btn" data-lang="js"><span class="lang-badge js">JS</span></button>
+          <span class="char-count" id="count-active">0 文字</span>
+        </div>
+        <textarea id="code-html" class="code-area active" data-lang="html" placeholder="HTML を入力..." spellcheck="false"></textarea>
+        <textarea id="code-css" class="code-area" data-lang="css" placeholder="CSS を入力..." spellcheck="false"></textarea>
+        <textarea id="code-js" class="code-area" data-lang="js" placeholder="JavaScript を入力..." spellcheck="false"></textarea>
       </div>
-      <textarea id="code-html" class="code-area active" data-lang="html" placeholder="HTML を入力..." spellcheck="false"></textarea>
-      <textarea id="code-css" class="code-area" data-lang="css" placeholder="CSS を入力..." spellcheck="false"></textarea>
-      <textarea id="code-js" class="code-area" data-lang="js" placeholder="JavaScript を入力..." spellcheck="false"></textarea>
+
+      <!-- Horizontal resizer -->
+      <div class="resizer-h" id="rh-console"></div>
+
+      <!-- Console (scoped to the code pane) -->
+      <div id="console-panel" style="height: 140px;" class="collapsed">
+        <div class="console-header" id="console-toggle">
+          <span>Console</span>
+          <span class="error-badge" id="error-badge">0</span>
+          <div class="status-dot" id="console-dot"></div>
+          <span class="toggle-arrow" id="toggle-arrow">▼</span>
+        </div>
+        <div id="console-list"></div>
+      </div>
     </div>
 
     <div class="resizer-v" id="rv1"></div>
 
-    <!-- Preview -->
+    <!-- Preview: fills full height of the screen -->
     <div class="preview-pane" id="pane-preview" style="flex: 1;">
       <div class="preview-header">
         <span class="lang-badge preview">PREVIEW</span>
@@ -433,31 +445,17 @@
     </div>
   </div>
 
-  <!-- Horizontal resizer -->
-  <div class="resizer-h" id="rh-console"></div>
-
-  <!-- Console -->
-  <div id="console-panel" style="height: 140px;" class="collapsed">
-    <div class="console-header" id="console-toggle">
-      <span>Console</span>
-      <span class="error-badge" id="error-badge">0</span>
-      <div class="status-dot" id="console-dot"></div>
-      <span class="toggle-arrow" id="toggle-arrow">▼</span>
-    </div>
-    <div id="console-list"></div>
-  </div>
-
   <!-- Mobile bottom tab bar -->
   <nav id="mobile-tabs">
-    <button class="mobile-tab html active" data-target="pane-editor" data-lang="html">
+    <button class="mobile-tab html active" data-target="left-column" data-lang="html">
       <div class="tab-dot"></div>
       HTML
     </button>
-    <button class="mobile-tab css" data-target="pane-editor" data-lang="css">
+    <button class="mobile-tab css" data-target="left-column" data-lang="css">
       <div class="tab-dot"></div>
       CSS
     </button>
-    <button class="mobile-tab js" data-target="pane-editor" data-lang="js">
+    <button class="mobile-tab js" data-target="left-column" data-lang="js">
       <div class="tab-dot"></div>
       JS
     </button>
@@ -738,8 +736,8 @@ ${js}
     });
   }
 
-  makeVResizer('rv1', 'pane-editor', 'pane-preview');
-  makeHResizer('rh-console', 'top-row', 'console-panel');
+  makeVResizer('rv1', 'left-column', 'pane-preview');
+  makeHResizer('rh-console', 'pane-editor', 'console-panel');
 
   // ── Buttons ───────────────────────────────────────────
   $('btn-clear-all').addEventListener('click', () => {
@@ -783,7 +781,7 @@ ${js}
 
   // ── Mobile tab switching ──────────────────────────────
   const mobileTabs = document.querySelectorAll('.mobile-tab');
-  const allPanes   = ['pane-editor','pane-preview'];
+  const allPanes   = ['left-column','pane-preview'];
 
   function isMobile() { return window.innerWidth <= 768; }
 
